@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Progetto Sub-45' (10 KM)</title>
+    
+    <!-- Meta tag per renderla "App Like" su iOS e Android -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/4f46e5/ffffff?text=45'">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 900: '#312e81' },
+                        dark: '#0f172a'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Animazioni Accordion */
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+            opacity: 0;
+        }
+        .accordion-open .accordion-content { opacity: 1; }
+        
+        /* Toggle Switch Custom */
+        .toggle-checkbox:checked { right: 0; border-color: #10b981; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #10b981; }
+        .toggle-checkbox { right: 4px; z-index: 1; transition: all 0.3s; }
+        .toggle-label { transition: all 0.3s; }
+
+        /* Stili per la stampa A4 */
+        @media print {
+            body { background: white !important; padding: 0 !important; color: black !important; }
+            .no-print, .bottom-bar { display: none !important; }
+            .print-only { display: block !important; }
+            .accordion-content { max-height: none !important; opacity: 1 !important; }
+            .workout-card { break-inside: avoid; border: 1px solid #ccc !important; box-shadow: none !important; margin-bottom: 10px; }
+            .week-section { page-break-inside: avoid; margin-bottom: 20px; }
+            textarea { border: none !important; resize: none !important; height: auto !important; }
+            .container { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+        }
+    </style>
+
+    <!-- Generatore Dinamico PWA -->
+    <script>
+        const manifestData = {
+            name: "Progetto Sub-45' (10 KM)",
+            short_name: "Sub-45'",
+            start_url: "./", // Adatta automaticamente per GitHub Pages
+            display: "standalone",
+            background_color: "#f8fafc",
+            theme_color: "#0f172a",
+            icons: [
+                { src: "https://placehold.co/192x192/4f46e5/ffffff.png?text=45'", sizes: "192x192", type: "image/png" },
+                { src: "https://placehold.co/512x512/4f46e5/ffffff.png?text=45'", sizes: "512x512", type: "image/png" }
+            ]
+        };
+        
+        // Usa Blob URL per massima compatibilità ed evitare errori CSP
+        const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/manifest+json' });
+        const manifestUrl = URL.createObjectURL(manifestBlob);
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = manifestUrl;
+        document.head.appendChild(manifestLink);
+
+        // Su GitHub Pages (ambiente HTTPS), i browser moderni permettono il prompt
+        // di installazione con un manifest valido senza bisogno di forzare un finto Service Worker.
+
+        // Intercetta l'evento di installazione e mostra il tasto
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const btnDesktop = document.getElementById('installBtnDesktop');
+            const btnMobile = document.getElementById('installBtnMobile');
+            if(btnDesktop) btnDesktop.classList.remove('hidden');
+            if(btnMobile) btnMobile.classList.remove('hidden');
+        });
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans pb-24 md:pb-8 selection:bg-brand-500 selection:text-white">
+
+    <!-- Notifica Toast -->
+    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-5 py-3 rounded-full shadow-2xl z-50 transition-all duration-300 opacity-0 -translate-y-10 pointer-events-none flex items-center gap-2 font-medium text-sm">
+        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        <span id="toast-msg">Salvataggio...</span>
+    </div>
+
+    <!-- Header / Nav -->
+    <header class="bg-dark text-white sticky top-0 z-40 shadow-md no-print">
+        <div class="max-w-3xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold tracking-tight">Progetto Sub-45'</h1>
+                <p class="text-xs text-brand-100 opacity-80">10k Mesociclo - 8 Settimane</p>
+            </div>
+            
+            <!-- Tasto Installa Mobile (visibile solo se installabile) -->
+            <button id="installBtnMobile" onclick="installApp()" class="hidden md:hidden bg-gradient-to-r from-emerald-400 to-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-md shadow-emerald-500/30 transition flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Installa App
+            </button>
+
+            <!-- Pulsanti Desktop (Nascosti su mobile, usano la barra sotto) -->
+            <div class="hidden md:flex gap-3">
+                <button id="installBtnDesktop" onclick="installApp()" class="hidden bg-gradient-to-r from-emerald-400 to-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-md shadow-emerald-500/30 transition flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Installa App
+                </button>
+                <button onclick="document.getElementById('fileInput').click()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> Importa</button>
+                <button onclick="exportData()" class="bg-brand-600 hover:bg-brand-500 px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> Esporta .md</button>
+                <button onclick="window.print()" class="bg-slate-200 text-slate-800 hover:bg-white px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg> Stampa</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto p-4 container mt-2">
+        
+        <!-- Ritmi Grid (Riprogettato per Mobile) -->
+        <div class="mb-8">
+            <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 px-1">Ritmi Obiettivo</h2>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                
+                <!-- Ritmo Gara (Hero Card, occupa 2 colonne su mobile) -->
+                <div class="col-span-2 md:col-span-1 bg-brand-50 p-4 rounded-2xl border-2 border-brand-500 flex flex-col justify-center items-center relative overflow-hidden order-first md:order-none shadow-sm">
+                    <div class="absolute top-0 right-0 w-10 h-10 bg-brand-500 rounded-bl-full -mr-2 -mt-2"></div>
+                    <span class="text-[10px] font-bold text-brand-600 uppercase tracking-wider">Ritmo Gara</span>
+                    <span class="text-3xl md:text-xl font-black text-brand-900 mt-1">4'30"</span>
+                    <span class="text-[10px] text-brand-600 font-semibold mt-1">Target Finale</span>
+                </div>
+
+                <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center items-center text-center">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fondo Lento</span>
+                    <span class="text-lg font-black text-slate-800">5'40"-5'50"</span>
+                    <span class="text-[9px] text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded-md mt-1">FC < 145</span>
+                </div>
+                
+                <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center items-center text-center">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fondo Medio</span>
+                    <span class="text-lg font-black text-slate-800">4'50"-5'00"</span>
+                </div>
+
+                <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center items-center text-center">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rip. Lunghe</span>
+                    <span class="text-lg font-black text-slate-800">4'20"-4'30"</span>
+                </div>
+                
+                <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center items-center text-center">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rip. Brevi</span>
+                    <span class="text-lg font-black text-slate-800">4'05"-4'15"</span>
+                </div>
+                
+            </div>
+        </div>
+
+        <!-- Sezioni Teoriche (Accordion) -->
+        <div class="mb-8 space-y-3 no-print">
+            <!-- Warmup -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden accordion-item">
+                <button class="w-full px-5 py-4 text-left flex justify-between items-center font-bold text-slate-800" onclick="toggleAccordion(this)">
+                    <span class="flex items-center gap-2"><svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"></path></svg> Riscaldamento e Defaticamento</span>
+                    <svg class="w-5 h-5 transform transition-transform chevron text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="accordion-content bg-slate-50 px-5 pb-5 text-sm text-slate-600 leading-relaxed">
+                    <p class="mb-2"><strong>Riscaldamento:</strong> 10-15' corsa lentissima + Mobilità Dinamica (slanci, affondi, no stretching statico) + 3-4 allunghi da 60m.</p>
+                    <p><strong>Defaticamento:</strong> 5-10' corsa lenta/camminata + Stretching Statico a muscolo caldo (polpacci, quadricipiti, femorali - 30 sec x gruppo).</p>
+                </div>
+            </div>
+            <!-- Nutrition -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden accordion-item">
+                <button class="w-full px-5 py-4 text-left flex justify-between items-center font-bold text-slate-800" onclick="toggleAccordion(this)">
+                    <span class="flex items-center gap-2"><svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg> Strategia Nutrizionale (77.5kg)</span>
+                    <svg class="w-5 h-5 transform transition-transform chevron text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="accordion-content bg-slate-50 px-5 pb-5 text-sm text-slate-600 leading-relaxed">
+                    <ul class="list-disc pl-4 space-y-1">
+                        <li><strong>Giorni Qualità (Lun/Ven):</strong> Sera prima ricarica glicogeno (120-150g carbo complessi). Spuntino 1.5-2h prima con zuccheri rapidi.</li>
+                        <li><strong>Fondo Lento (Mer):</strong> Scorte leggere. Pasto bilanciato pro/verdure, pochi carbo. Abituiamo il corpo ai grassi.</li>
+                        <li><strong>Riposo:</strong> Proteine alte per preservare il 74.5% di massa magra, calorie stabili.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="text-2xl font-black text-slate-800 mb-6 flex items-center gap-2">
+            <svg class="w-6 h-6 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            Scheda Settimanale
+        </h2>
+
+        <!-- Container Piano Allenamenti -->
+        <div id="plan-container" class="space-y-4">
+            <!-- I dati verranno iniettati qui da JavaScript -->
+        </div>
+
+    </main>
+
+    <!-- Bottom Navigation Bar (Mobile Only) -->
+    <nav class="md:hidden fixed bottom-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] pb-safe z-40 no-print">
+        <div class="flex justify-around items-center h-16">
+            <button onclick="document.getElementById('fileInput').click()" class="flex flex-col items-center justify-center w-full h-full text-slate-500 hover:text-brand-600 transition-colors">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span class="text-[10px] font-medium uppercase">Carica</span>
+            </button>
+            <button onclick="exportData()" class="flex flex-col items-center justify-center w-full h-full text-brand-600 font-bold bg-brand-50">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                <span class="text-[10px] uppercase">Salva .md</span>
+            </button>
+            <button onclick="window.print()" class="flex flex-col items-center justify-center w-full h-full text-slate-500 hover:text-brand-600 transition-colors">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                <span class="text-[10px] font-medium uppercase">Stampa</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Input file nascosto per importazione -->
+    <input type="file" id="fileInput" accept=".md" class="hidden" onchange="importData(event)">
+
+<script>
+    // --- GESTIONE INSTALLAZIONE PWA ---
+    function installApp() {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    document.getElementById('installBtnDesktop').classList.add('hidden');
+                    document.getElementById('installBtnMobile').classList.add('hidden');
+                }
+                deferredPrompt = null;
+            });
+        }
+    }
+
+    // --- DATI DEL PIANO ---
+    const planData = [
+        {
+            phase: "FASE 1: Costruzione (Sviluppo VO2 Max)",
+            weeks: [
+                {
+                    num: 1,
+                    workouts: [
+                        { id: "w1-lun", day: "Lunedì", desc: "Risc. + <strong>8 x 400m a 4'10\"</strong> (Rec. 1'30\" camminata) + Defat." },
+                        { id: "w1-mer", day: "Mercoledì", desc: "<strong>50' Fondo Lento</strong> + 5 Allunghi da 100m finali." },
+                        { id: "w1-ven", day: "Venerdì", desc: "Risc. + <strong>Progressione 10 km:</strong> 6 km FL a 5'45\" + 4 km FM a 4'55\"" }
+                    ]
+                },
+                {
+                    num: 2,
+                    workouts: [
+                        { id: "w2-lun", day: "Lunedì", desc: "Risc. + <strong>5 x 800m a 4'15\"</strong> (Rec. 2' camminata) + Defat." },
+                        { id: "w2-mer", day: "Mercoledì", desc: "<strong>60' Fondo Lento</strong> (Focus sui battiti <145, NO allunghi)." },
+                        { id: "w2-ven", day: "Venerdì", desc: "Risc. + <strong>3 x 2000m a 4'30\"</strong> (Rec. 3' camminata) + Defat." }
+                    ]
+                },
+                {
+                    num: 3,
+                    workouts: [
+                        { id: "w3-lun", day: "Lunedì", desc: "Risc. + <strong>6 x 1000m a 4'20\"</strong> (Rec. 2'30\" camminata) + Defat." },
+                        { id: "w3-mer", day: "Mercoledì", desc: "<strong>50' Fondo Lento</strong> + 5 Allunghi." },
+                        { id: "w3-ven", day: "Venerdì", desc: "<strong>14 km Lungo Lento</strong> a 5'45\" / 5'50\". Costanza assoluta." }
+                    ]
+                }
+            ]
+        },
+        {
+            phase: "FASE 2: Assimilazione e Picco (Resistenza alla Soglia)",
+            weeks: [
+                {
+                    num: 4, label: "Scarico",
+                    workouts: [
+                        { id: "w4-lun", day: "Lunedì", desc: "45' FL + 5 Allunghi leggeri." },
+                        { id: "w4-mer", day: "Mercoledì", desc: "Riposo totale o 30' FL rigenerante." },
+                        { id: "w4-ven", day: "Venerdì", desc: "Risc. + <strong>4 km a Ritmo Gara (4'30\")</strong> + Defat. (Test validazione)." }
+                    ]
+                },
+                {
+                    num: 5,
+                    workouts: [
+                        { id: "w5-lun", day: "Lunedì", desc: "Risc. + <strong>4 x 1500m a 4'25\"</strong> (Rec. 3' camminata) + Defat." },
+                        { id: "w5-mer", day: "Mercoledì", desc: "<strong>50' Fondo Lento</strong>." },
+                        { id: "w5-ven", day: "Venerdì", desc: "Risc. + <strong>Fondo Medio 8 km a 4'50\"</strong>." }
+                    ]
+                },
+                {
+                    num: 6,
+                    workouts: [
+                        { id: "w6-lun", day: "Lunedì", desc: "Risc. + <strong>3 x 2000m a 4'25\"</strong> (Rec. 3' camminata) + Defat." },
+                        { id: "w6-mer", day: "Mercoledì", desc: "<strong>60' Fondo Lento</strong>." },
+                        { id: "w6-ven", day: "Venerdì", desc: "Risc. + <strong>2 x 3000m a 4'30\"</strong> (Rec. 4' camminata). <em>Chiave!</em>" }
+                    ]
+                },
+                {
+                    num: 7, label: "Specificità",
+                    workouts: [
+                        { id: "w7-lun", day: "Lunedì", desc: "Risc. + <strong>5 x 1000m a 4'20\"</strong> (Rec. 2' camminata)." },
+                        { id: "w7-mer", day: "Mercoledì", desc: "<strong>45' Fondo Lento</strong> + 5 Allunghi." },
+                        { id: "w7-ven", day: "Venerdì", desc: "Risc. + <strong>Test Corto Veloce: 6 km a 4'35\"</strong> (Sofferenza in soglia)." }
+                    ]
+                }
+            ]
+        },
+        {
+            phase: "FASE 3: Tapering e Gara",
+            weeks: [
+                {
+                    num: 8, label: "LA GARA", highlight: true,
+                    workouts: [
+                        { id: "w8-lun", day: "Lunedì", desc: "<strong>40' Fondo Lento</strong> + 5 Allunghi fluidi." },
+                        { id: "w8-mer", day: "Mercoledì", desc: "<strong>30' Fondo Lento</strong> + <strong>2 km a 4'30\"</strong>." },
+                        { id: "w8-ven", day: "Venerdì (IL TEST)", isRace: true, desc: "<strong>TEST 10 KM - OBIETTIVO SUB-45'</strong><br><span class='text-brand-600 text-sm'>Km 1-3 a 4'33\" | Km 4-7 a 4'30\" | Km 8-10 a tutta forza.</span>" }
+                    ]
+                }
+            ]
+        }
+    ];
+
+    // --- GESTIONE STATO (LocalStorage) ---
+    const STORAGE_KEY = 'sub45App_Data';
+    let appState = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+
+    function saveToLocal() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+        showToast("Salvato localmente");
+        updateWeekBadges();
+    }
+
+    // --- RENDER UI ---
+    function renderPlan() {
+        const container = document.getElementById('plan-container');
+        let html = '';
+        
+        // Cerca la prima settimana non completata per aprirla di default
+        let firstUnfinishedWeekNum = 1;
+        let foundUnfinished = false;
+        
+        for (const phase of planData) {
+            for (const week of phase.weeks) {
+                const isAllDone = week.workouts.every(w => appState[w.id] && appState[w.id].done);
+                if (!isAllDone) { 
+                    firstUnfinishedWeekNum = week.num; 
+                    foundUnfinished = true;
+                    break; 
+                }
+            }
+            if (foundUnfinished) break;
+        }
+
+        planData.forEach(phase => {
+            html += `<div class="mt-8 mb-4 text-xs font-black tracking-widest text-slate-400 uppercase ml-2">${phase.phase}</div>`;
+            
+            phase.weeks.forEach(week => {
+                const isOpen = week.num === firstUnfinishedWeekNum ? 'accordion-open' : '';
+                const headerStyle = week.highlight ? 'bg-brand-600 text-white' : 'bg-white text-slate-800';
+                const titleStyle = week.highlight ? 'text-white' : 'text-slate-800';
+                const chevronStyle = week.highlight ? 'text-white' : 'text-slate-400';
+                const borderStyle = week.highlight ? 'border-brand-500 shadow-brand-500/30 shadow-lg' : 'border-slate-200 shadow-sm';
+                
+                html += `
+                <div class="week-section rounded-2xl border ${borderStyle} overflow-hidden accordion-item ${isOpen}" id="week-${week.num}">
+                    <button class="w-full px-5 py-4 text-left flex justify-between items-center ${headerStyle} border-b border-slate-100/20" onclick="toggleAccordion(this)">
+                        <div class="flex items-center gap-3">
+                            <span class="font-black text-lg ${titleStyle}">Settimana ${week.num}</span>
+                            ${week.label ? `<span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${week.highlight ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}">${week.label}</span>` : ''}
+                            <span id="badge-${week.num}" class="week-badge hidden ml-1 text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full uppercase"><svg class="w-3 h-3 inline pb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> Fatta</span>
+                        </div>
+                        <svg class="w-6 h-6 transform transition-transform chevron ${chevronStyle}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="accordion-content bg-slate-50/50">
+                        <div class="p-4 flex flex-col gap-4">`;
+                
+                week.workouts.forEach(workout => {
+                    const data = appState[workout.id] || { done: false, note: '' };
+                    const cardBg = data.done ? 'bg-green-50/50 border-green-200' : 'bg-white border-slate-200';
+                    const raceStyle = workout.isRace ? 'border-brand-500 border-2 shadow-md' : '';
+                    
+                    html += `
+                            <div class="workout-card rounded-xl p-4 border ${cardBg} ${raceStyle} transition-colors duration-300 relative">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div class="font-bold ${workout.isRace ? 'text-brand-600 text-lg' : 'text-slate-700'}">${workout.day}</div>
+                                    
+                                    <!-- Custom Toggle Switch -->
+                                    <div class="relative inline-block w-12 h-6 align-middle select-none transition duration-200 ease-in no-print">
+                                        <input type="checkbox" id="check-${workout.id}" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-slate-200 appearance-none cursor-pointer" 
+                                            ${data.done ? 'checked' : ''} onchange="updateWorkout('${workout.id}', this.checked, null, ${week.num})"/>
+                                        <label for="check-${workout.id}" class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-200 cursor-pointer"></label>
+                                    </div>
+                                </div>
+                                
+                                <div class="text-sm text-slate-600 mb-4 leading-relaxed">${workout.desc}</div>
+                                
+                                <div class="relative mt-2">
+                                    <textarea id="note-${workout.id}" class="w-full bg-transparent border-b border-slate-300 focus:border-brand-500 outline-none resize-none text-sm text-slate-700 placeholder-slate-400 py-1 transition-colors min-h-[30px]" placeholder="Aggiungi tempi reali e note..." oninput="autoResize(this); debounceSave('${workout.id}', this.value)">${data.note}</textarea>
+                                </div>
+                            </div>
+                    `;
+                });
+                
+                html += `</div></div></div>`;
+            });
+        });
+        
+        container.innerHTML = html;
+        
+        // Setta l'altezza iniziale delle textarea e i badge
+        document.querySelectorAll('textarea').forEach(autoResize);
+        updateWeekBadges();
+        
+        // Imposta le altezze per l'accordion per la prima volta
+        document.querySelectorAll('.accordion-open .accordion-content').forEach(el => {
+            el.style.maxHeight = el.scrollHeight + "px";
+        });
+    }
+
+    // --- LOGICA UI ---
+    function toggleAccordion(btn) {
+        const item = btn.closest('.accordion-item');
+        const content = item.querySelector('.accordion-content');
+        const chevron = item.querySelector('.chevron');
+        
+        if (item.classList.contains('accordion-open')) {
+            content.style.maxHeight = '0px';
+            item.classList.remove('accordion-open');
+            chevron.style.transform = 'rotate(0deg)';
+        } else {
+            content.style.maxHeight = content.scrollHeight + "px";
+            item.classList.add('accordion-open');
+            chevron.style.transform = 'rotate(-180deg)';
+        }
+    }
+
+    function autoResize(textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = (textarea.scrollHeight) + 'px';
+    }
+
+    function updateWeekBadges() {
+        planData.forEach(phase => {
+            phase.weeks.forEach(week => {
+                const isAllDone = week.workouts.every(w => appState[w.id] && appState[w.id].done);
+                const badge = document.getElementById(`badge-${week.num}`);
+                if (badge) {
+                    badge.style.display = isAllDone ? 'inline-block' : 'none';
+                }
+            });
+        });
+    }
+
+    let saveTimeout;
+    function debounceSave(id, noteValue) {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            updateWorkout(id, null, noteValue);
+        }, 1000);
+    }
+
+    function updateWorkout(id, isDone, note, weekNum) {
+        if (!appState[id]) appState[id] = { done: false, note: '' };
+        
+        if (isDone !== null) {
+            appState[id].done = isDone;
+            // Aggiorna UI card
+            const card = document.getElementById(`check-${id}`).closest('.workout-card');
+            if (isDone) {
+                card.classList.replace('bg-white', 'bg-green-50/50');
+                card.classList.replace('border-slate-200', 'border-green-200');
+            } else {
+                card.classList.replace('bg-green-50/50', 'bg-white');
+                card.classList.replace('border-green-200', 'border-slate-200');
+            }
+            // Fix per animazione accordion se la card cambia altezza
+            const content = card.closest('.accordion-content');
+            if(content && content.style.maxHeight !== '0px') {
+                setTimeout(()=> content.style.maxHeight = content.scrollHeight + "px", 50);
+            }
+        }
+        
+        if (note !== null) appState[id].note = note;
+        
+        saveToLocal();
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        document.getElementById('toast-msg').innerText = msg;
+        t.classList.remove('opacity-0', '-translate-y-10');
+        setTimeout(() => t.classList.add('opacity-0', '-translate-y-10'), 2500);
+    }
+
+    // --- IMPORT / EXPORT MARKDOWN ---
+    const APP_DATA_MARKER_START = "\n\n<!-- APP_DATA_START ";
+    const APP_DATA_MARKER_END = " APP_DATA_END -->";
+
+    function exportData() {
+        const today = new Date().toLocaleDateString('it-IT');
+        let md = `# Progetto Sub-45' (10 KM) - Risultati\nGenerato il: ${today}\n\n`;
+        
+        planData.forEach(phase => {
+            md += `## ${phase.phase}\n`;
+            phase.weeks.forEach(week => {
+                md += `### Settimana ${week.num}\n`;
+                week.workouts.forEach(w => {
+                    const data = appState[w.id] || { done: false, note: '' };
+                    const check = data.done ? '[x]' : '[ ]';
+                    md += `- ${check} **${w.day}:** ${w.desc.replace(/<[^>]*>?/gm, '')}\n`; // strip html
+                    if (data.note) {
+                        md += `  > *Note:* ${data.note.replace(/\n/g, '\n  > ')}\n`;
+                    }
+                });
+                md += '\n';
+            });
+        });
+
+        // Appendi i dati in formato JSON protetto da commento HTML per l'importazione
+        const dataToSave = JSON.stringify(appState);
+        md += `${APP_DATA_MARKER_START}${dataToSave}${APP_DATA_MARKER_END}`;
+
+        const blob = new Blob([md], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Allenamento_Sub45_${today.replace(/\//g, '-')}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showToast("File .md scaricato");
+    }
+
+    function importData(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const text = e.target.result;
+            const startIdx = text.indexOf(APP_DATA_MARKER_START);
+            const endIdx = text.indexOf(APP_DATA_MARKER_END);
+
+            if (startIdx > -1 && endIdx > -1) {
+                const jsonStr = text.substring(startIdx + APP_DATA_MARKER_START.length, endIdx);
+                try {
+                    const importedState = JSON.parse(jsonStr);
+                    appState = importedState;
+                    saveToLocal();
+                    renderPlan();
+                    showToast("Dati ripristinati con successo!");
+                } catch (err) {
+                    alert("Errore nella lettura dei dati. Il file potrebbe essere corrotto.");
+                }
+            } else {
+                alert("Nessun dato di salvataggio trovato in questo file .md");
+            }
+            // Resetta l'input file per permettere di ricaricare lo stesso file
+            document.getElementById('fileInput').value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    // Inizializzazione
+    window.onload = () => {
+        renderPlan();
+    };
+</script>
+</body>
+</html>
